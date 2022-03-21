@@ -10,7 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	orsa "github.com/anhuynhgg1223/Capstone/mqtt_ecc/pkg/rsa"
+	orsa "Mqtt_crypt/pkg/rsa"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/shirou/gopsutil/process"
 )
