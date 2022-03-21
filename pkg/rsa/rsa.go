@@ -9,8 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/allvisss/mqtt-v0/pkg/ProcessMeasure"
-	"github.com/anhuynhgg1223/Capstone/mqtt_ecc/pkg/ProcessMeasure"
+	proc "github.com/anhuynhgg1223/Mqtt_crypt/pkg/ProcessMeasure"
 	"github.com/shirou/gopsutil/process"
 )
 
@@ -20,7 +19,6 @@ type KeyPair struct {
 }
 
 func KeyGeneration() (interface{}, error) {
-	ProcessMeasure.GetProcStatus
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		fmt.Printf("Failed to generate private/public key pair: %s\n", err)
@@ -35,7 +33,7 @@ func KeyGeneration() (interface{}, error) {
 func RSA_Encrypt(secretMessage string, key rsa.PublicKey) string {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.getProcStatus("Decrypt", thisProc, stop)
+	go proc.GetProcStatus("Decrypt", thisProc, stop)
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
 	ciphertext, _ := rsa.EncryptOAEP(sha256.New(), rng, &key, []byte(secretMessage), label)
