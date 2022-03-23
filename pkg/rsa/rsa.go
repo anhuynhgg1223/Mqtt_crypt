@@ -1,51 +1,38 @@
 package rsa
 
 import (
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"os"
 
 	proc "github.com/anhuynhgg1223/Mqtt_crypt/pkg/ProcessMeasure"
 	"github.com/shirou/gopsutil/process"
 )
 
-type KeyPair struct {
-	privateKey crypto.PrivateKey
-	publicKey  crypto.PublicKey
-}
-
-func KeyGeneration() (interface{}, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		fmt.Printf("Failed to generate private/public key pair: %s\n", err)
-		return nil, err
-	}
-	return KeyPair{
-		privateKey: privateKey,
-		publicKey:  privateKey.PublicKey,
-	}, nil
-}
-
-func RSA_Encrypt(secretMessage string, key rsa.PublicKey) string {
+func RSA_Encrypt(secretMessage string, key *rsa.PublicKey) string {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.GetProcStatus("Decrypt", thisProc, stop)
+	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
-	ciphertext, _ := rsa.EncryptOAEP(sha256.New(), rng, &key, []byte(secretMessage), label)
+	ciphertext, _ := rsa.EncryptOAEP(sha256.New(), rng, key, []byte(secretMessage), label)
+
 	stop <- true
 	return base64.StdEncoding.EncodeToString(ciphertext)
 }
 
-func RSA_Decrypt(cipherText string, privKey rsa.PrivateKey) string {
+func RSA_Decrypt(cipherText string, privKey *rsa.PrivateKey) string {
+	thisProc, _ := process.NewProcess(int32(os.Getpid()))
+	stop := make(chan bool)
+	go proc.GetProcStatus("RSA", "Decrypt", thisProc, stop)
+
 	ct, _ := base64.StdEncoding.DecodeString(cipherText)
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
-	plaintext, _ := rsa.DecryptOAEP(sha256.New(), rng, &privKey, ct, label)
-	fmt.Println("Plaintext:", string(plaintext))
+	plaintext, _ := rsa.DecryptOAEP(sha256.New(), rng, privKey, ct, label)
+
+	stop <- true
 	return string(plaintext)
 }
