@@ -25,26 +25,21 @@ func Ret_publicKey(publicKey_byte []byte) *ecies.PublicKey {
 func Ecies_Encrypt(secretMessage string, key *ecies.PublicKey) string {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
-
+	go proc.GetProcStatus("ECC", "Encrypt", thisProc, stop)
 	ciphertext, err := ecies.Encrypt(key, []byte(secretMessage))
 	if err != nil {
 		panic(err)
 	}
-
 	stop <- true
-
 	return base64.StdEncoding.EncodeToString(ciphertext)
 }
 
 func Ecies_Decrypt(cipherText string, privKey *ecies.PrivateKey) string {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.GetProcStatus("RSA", "Decrypt", thisProc, stop)
-
+	go proc.GetProcStatus("ECC", "Decrypt", thisProc, stop)
 	ct, _ := base64.StdEncoding.DecodeString(cipherText)
 	plaintext, _ := ecies.Decrypt(privKey, ct)
-
 	stop <- true
 	return string(plaintext)
 }

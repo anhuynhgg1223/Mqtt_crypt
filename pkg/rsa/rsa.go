@@ -18,7 +18,6 @@ func RSA_Encrypt(secretMessage string, key *rsa.PublicKey) string {
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
 	ciphertext, _ := rsa.EncryptOAEP(sha256.New(), rng, key, []byte(secretMessage), label)
-
 	stop <- true
 	return base64.StdEncoding.EncodeToString(ciphertext)
 }
@@ -27,12 +26,10 @@ func RSA_Decrypt(cipherText string, privKey *rsa.PrivateKey) string {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
 	go proc.GetProcStatus("RSA", "Decrypt", thisProc, stop)
-
 	ct, _ := base64.StdEncoding.DecodeString(cipherText)
 	label := []byte("OAEP Encrypted")
 	rng := rand.Reader
 	plaintext, _ := rsa.DecryptOAEP(sha256.New(), rng, privKey, ct, label)
-
 	stop <- true
 	return string(plaintext)
 }
