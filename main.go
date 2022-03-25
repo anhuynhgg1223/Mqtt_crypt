@@ -161,7 +161,7 @@ var thisClient = "1"
 var thatClient = "2"
 
 func main() {
-	KeyMonitor.name = "elg"
+	KeyMonitor.name = "rsa"
 	KeyMonitor.isCome = false
 	generate_Key()
 	setClient()

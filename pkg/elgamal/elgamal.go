@@ -4,10 +4,14 @@ import (
 	"crypto/rand"
 	"errors"
 	"math/big"
+	"os"
 	"time"
 
 	Mrand "math/rand"
 
+	proc "github.com/anhuynhgg1223/Mqtt_crypt/pkg/ProcessMeasure"
+
+	"github.com/shirou/gopsutil/process"
 	"golang.org/x/crypto/openpgp/elgamal"
 )
 
@@ -22,7 +26,6 @@ func GenerateKey(bitsize, probability int) (*elgamal.PrivateKey, error) {
 	if err != nil {
 		panic("Element Gen ERROR")
 	}
-
 	randSource := Mrand.New(Mrand.NewSource(time.Now().UnixNano()))
 	priv := new(big.Int).Rand(randSource, new(big.Int).Sub(q, one))
 	y := new(big.Int).Exp(g, priv, p)
@@ -69,26 +72,32 @@ func Gen(n, probability int) (*big.Int, *big.Int, *big.Int, error) {
 }
 
 func Encrypt(pub elgamal.PublicKey, message []byte) ([]byte, []byte, error) {
+	thisProc, _ := process.NewProcess(int32(os.Getpid()))
+	stop := make(chan bool)
+	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
+
 	k, err := rand.Int(rand.Reader, pub.P)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	m := new(big.Int).SetBytes(message)
 	if m.Cmp(pub.P) == 1 {
 		return nil, nil, ErrMessageLarge
 	}
-
 	c1 := new(big.Int).Exp(pub.G, k, pub.P)
 	s := new(big.Int).Exp(pub.Y, k, pub.P)
 	c2 := new(big.Int).Mod(
 		new(big.Int).Mul(m, s),
 		pub.P,
 	)
+	stop <- true
 	return c1.Bytes(), c2.Bytes(), nil
 }
 
 func Decrypt(priv *elgamal.PrivateKey, cipher1, cipher2 []byte) ([]byte, error) {
+	thisProc, _ := process.NewProcess(int32(os.Getpid()))
+	stop := make(chan bool)
+	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
 	c1 := new(big.Int).SetBytes(cipher1)
 	c2 := new(big.Int).SetBytes(cipher2)
 	if c1.Cmp(priv.P) == 1 && c2.Cmp(priv.P) == 1 {
@@ -104,5 +113,6 @@ func Decrypt(priv *elgamal.PrivateKey, cipher1, cipher2 []byte) ([]byte, error) 
 		new(big.Int).Mul(s, c2),
 		priv.P,
 	)
+	stop <- true
 	return m.Bytes(), nil
 }
