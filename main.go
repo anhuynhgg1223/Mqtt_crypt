@@ -64,6 +64,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 				fmt.Println("ELG key gotten!")
 				elgCount = 2
 				KeyMonitor.isCome = false
+				skipFlag = true
 			}
 		}
 	}
@@ -92,8 +93,8 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		KeyMonitor.isCome = true
 		elgCount = 3
 	default:
-		if string(msg.Payload()) == "reqKeyRSA"+thisClient || string(msg.Payload()) == "reqKeyECC"+thisClient || string(msg.Payload()) == "Keycoming"+thisClient || string(msg.Payload()) == "reqKeyELG"+thisClient || string(msg.Payload()) == "ELGKeycoming"+thisClient {
-
+		if string(msg.Payload()) == "reqKeyRSA"+thisClient || string(msg.Payload()) == "reqKeyECC"+thisClient || string(msg.Payload()) == "Keycoming"+thisClient || string(msg.Payload()) == "reqKeyELG"+thisClient || string(msg.Payload()) == "ELGKeycoming"+thisClient || skipFlag {
+			skipFlag = false
 		} else {
 			switch KeyMonitor.name {
 			case "rsa":
@@ -153,10 +154,11 @@ var elgCount int
 var selfCount int
 var elgMessg ElgMsg
 var pubb elgamal.PublicKey
+var skipFlag bool
 
 var topic = "topic/test"
-var thisClient = "2"
-var thatClient = "1"
+var thisClient = "1"
+var thatClient = "2"
 
 func main() {
 	KeyMonitor.name = "elg"
