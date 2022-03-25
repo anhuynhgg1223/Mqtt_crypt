@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"time"
@@ -21,6 +23,42 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+type Config struct {
+	ID          string
+	Ip          string
+	Port        int
+	Username    string
+	Passwd      string
+	Topic       string
+	OpponentID  string
+	TypeEncrypt string
+}
+
+type flagKey struct {
+	name   string
+	isCome bool
+}
+
+type ElgMsg struct {
+	msgFrag1 []byte
+	msgFrag2 []byte
+}
+
+type elgSupport struct {
+	elgCount  int
+	selfCount int
+	elgMessg  ElgMsg
+	pubb      elgamal.PublicKey
+	skipFlag  bool
+}
+
+var conf Config
+var KeyMonitor flagKey
+var client mqtt.Client
+var opponentPublicKey interface{}
+var ourKey interface{}
+var sup elgSupport
+
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	if KeyMonitor.isCome {
 		switch KeyMonitor.name {
@@ -33,52 +71,52 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 			fmt.Println("ECC key gotten!")
 			KeyMonitor.isCome = false
 		case "elg":
-			switch elgCount {
+			switch sup.elgCount {
 			case 3:
 				temp := big.NewInt(1)
 				temp.UnmarshalJSON(msg.Payload())
-				pubb.G = big.NewInt(1)
+				sup.pubb.G = big.NewInt(1)
 				fmt.Println("=================================== Get Key G =======================================")
 				fmt.Println(temp)
 				fmt.Println("=====================================================================================")
-				*pubb.G = *temp
-				elgCount--
+				*sup.pubb.G = *temp
+				sup.elgCount--
 			case 2:
 				temp := big.NewInt(1)
 				temp.UnmarshalJSON(msg.Payload())
-				pubb.P = big.NewInt(1)
+				sup.pubb.P = big.NewInt(1)
 				fmt.Println("=================================== Get Key P =======================================")
 				fmt.Println(temp)
 				fmt.Println("=====================================================================================")
-				*pubb.P = *temp
-				elgCount--
+				*sup.pubb.P = *temp
+				sup.elgCount--
 			case 1:
 				temp := big.NewInt(1)
 				temp.UnmarshalJSON(msg.Payload())
-				pubb.Y = big.NewInt(1)
+				sup.pubb.Y = big.NewInt(1)
 				fmt.Println("=================================== Get Key y =======================================")
 				fmt.Println(temp)
 				fmt.Println("=====================================================================================")
-				*pubb.Y = *temp
-				opponentPublicKey = pubb
+				*sup.pubb.Y = *temp
+				opponentPublicKey = sup.pubb
 				fmt.Println("ELG key gotten!")
-				elgCount = 2
+				sup.elgCount = 2
 				KeyMonitor.isCome = false
-				skipFlag = true
+				sup.skipFlag = true
 			}
 		}
 	}
 	switch string(msg.Payload()) {
-	case "reqKeyRSA" + thatClient:
-		pub([]byte("Keycoming" + thisClient))
+	case "reqKeyRSA" + conf.OpponentID:
+		pub([]byte("Keycoming" + conf.ID))
 		pub(x509.MarshalPKCS1PublicKey(&ourKey.(*rsa.PrivateKey).PublicKey))
-	case "reqKeyECC" + thatClient:
+	case "reqKeyECC" + conf.OpponentID:
 		publicKeyByte := elliptic.Marshal(ourKey.(*ecc.PrivateKey).PublicKey.Curve, ourKey.(*ecc.PrivateKey).PublicKey.X, ourKey.(*ecc.PrivateKey).PublicKey.Y)
-		pub([]byte("Keycoming" + thisClient))
+		pub([]byte("Keycoming" + conf.ID))
 		pub(publicKeyByte)
-	case "reqKeyELG" + thatClient:
-		pub([]byte("ELGKeycoming" + thisClient))
-		selfCount = 3
+	case "reqKeyELG" + conf.OpponentID:
+		pub([]byte("ELGKeycoming" + conf.ID))
+		sup.selfCount = 3
 		by, _ := ourKey.(*elgamal.PrivateKey).PublicKey.G.MarshalJSON()
 		pub(by)
 		time.Sleep(time.Millisecond * 100)
@@ -87,14 +125,14 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		time.Sleep(time.Millisecond * 100)
 		by, _ = ourKey.(*elgamal.PrivateKey).PublicKey.Y.MarshalJSON()
 		pub(by)
-	case "Keycoming" + thatClient:
+	case "Keycoming" + conf.OpponentID:
 		KeyMonitor.isCome = true
-	case "ELGKeycoming" + thatClient:
+	case "ELGKeycoming" + conf.OpponentID:
 		KeyMonitor.isCome = true
-		elgCount = 3
+		sup.elgCount = 3
 	default:
-		if string(msg.Payload()) == "reqKeyRSA"+thisClient || string(msg.Payload()) == "reqKeyECC"+thisClient || string(msg.Payload()) == "Keycoming"+thisClient || string(msg.Payload()) == "reqKeyELG"+thisClient || string(msg.Payload()) == "ELGKeycoming"+thisClient || skipFlag {
-			skipFlag = false
+		if string(msg.Payload()) == "reqKeyRSA"+conf.ID || string(msg.Payload()) == "reqKeyECC"+conf.ID || string(msg.Payload()) == "Keycoming"+conf.ID || string(msg.Payload()) == "reqKeyELG"+conf.ID || string(msg.Payload()) == "ELGKeycoming"+conf.ID || sup.skipFlag {
+			sup.skipFlag = false
 		} else {
 			switch KeyMonitor.name {
 			case "rsa":
@@ -105,23 +143,23 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 				fmt.Printf("Received message: %v \n========\n", plain)
 			case "elg":
 
-				if !KeyMonitor.isCome && selfCount == 0 {
-					if elgCount == 1 {
-						elgMessg.msgFrag2 = msg.Payload()
-						plain, err := oelg.Decrypt(ourKey.(*elgamal.PrivateKey), elgMessg.msgFrag1, elgMessg.msgFrag2)
+				if !KeyMonitor.isCome && sup.selfCount == 0 {
+					if sup.elgCount == 1 {
+						sup.elgMessg.msgFrag2 = msg.Payload()
+						plain, err := oelg.Decrypt(ourKey.(*elgamal.PrivateKey), sup.elgMessg.msgFrag1, sup.elgMessg.msgFrag2)
 						if err != nil {
 							panic(err)
 						}
-						elgCount++
+						sup.elgCount++
 						fmt.Printf("Received message: %s \n========\n", plain)
 					} else {
-						elgMessg.msgFrag1 = msg.Payload()
-						elgCount--
+						sup.elgMessg.msgFrag1 = msg.Payload()
+						sup.elgCount--
 					}
 				}
 
-				if selfCount > 0 {
-					selfCount--
+				if sup.selfCount > 0 {
+					sup.selfCount--
 				}
 			}
 		}
@@ -136,33 +174,8 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	fmt.Printf("Connect lost: %v", err)
 }
 
-type flagKey struct {
-	name   string
-	isCome bool
-}
-
-type ElgMsg struct {
-	msgFrag1 []byte
-	msgFrag2 []byte
-}
-
-var KeyMonitor flagKey
-var client mqtt.Client
-var opponentPublicKey interface{}
-var ourKey interface{}
-var elgCount int
-var selfCount int
-var elgMessg ElgMsg
-var pubb elgamal.PublicKey
-var skipFlag bool
-
-var topic = "topic/test"
-var thisClient = "1"
-var thatClient = "2"
-
 func main() {
-	KeyMonitor.name = "rsa"
-	KeyMonitor.isCome = false
+	readConf()
 	generate_Key()
 	setClient()
 	sub()
@@ -191,14 +204,14 @@ func core() {
 	}
 }
 func pub(message []byte) {
-	token := client.Publish(topic, 0, false, message)
+	token := client.Publish(conf.Topic, 0, false, message)
 	token.Wait()
 }
 
 func sub() {
-	token := client.Subscribe(topic, 1, nil)
+	token := client.Subscribe(conf.Topic, 1, nil)
 	token.Wait()
-	fmt.Printf("Subscribed to topic: %s \n", topic)
+	fmt.Printf("Subscribed to topic: %s \n", conf.Topic)
 	reqKey()
 }
 
@@ -207,11 +220,11 @@ func reqKey() {
 	for opponentPublicKey == nil {
 		switch KeyMonitor.name {
 		case "rsa":
-			pub([]byte("reqKeyRSA" + thisClient))
+			pub([]byte("reqKeyRSA" + conf.ID))
 		case "ecc":
-			pub([]byte("reqKeyECC" + thisClient))
+			pub([]byte("reqKeyECC" + conf.ID))
 		case "elg":
-			pub([]byte("reqKeyELG" + thisClient))
+			pub([]byte("reqKeyELG" + conf.ID))
 		}
 		time.Sleep(time.Millisecond * 2000)
 	}
@@ -228,14 +241,19 @@ func generate_Key() {
 	}
 }
 
+func readConf() {
+	contenIn, _ := ioutil.ReadFile("config.json")
+	json.Unmarshal(contenIn, &conf)
+	KeyMonitor.name = conf.TypeEncrypt
+	KeyMonitor.isCome = false
+}
+
 func setClient() {
-	var broker = "192.168.208.143"
-	var port = 1883
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", broker, port))
-	opts.SetClientID("go_mqtt_client" + thisClient)
-	opts.SetUsername("rasOS")
-	opts.SetPassword("12345")
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", conf.Ip, conf.Port))
+	opts.SetClientID("go_mqtt_client_" + conf.ID)
+	opts.SetUsername(conf.Username)
+	opts.SetPassword(conf.Passwd)
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
