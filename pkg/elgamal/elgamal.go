@@ -2,52 +2,107 @@ package elgamal
 
 import (
 	"crypto/rand"
+	"errors"
 	"math/big"
+	"time"
+
+	Mrand "math/rand"
 
 	"golang.org/x/crypto/openpgp/elgamal"
 )
 
-var p, _ = new(big.Int).SetString("FCA682CE8E12CABA26EFCCF7110E526DB078B05EDECBCD1EB4A208F3AE1617AE01F35B91A47E6DF63413C5E12ED0899BCD132ACD50D99151BDC43EE737592E17", 16)
-var g, _ = new(big.Int).SetString("678471B27A9CF44EE91A49C5147DB1A9AAF244F05A434D6486931D2D14271B9E35030B71FD73DA179069B32E2935630E1C2062354D0DA20A6C416E50BE794CA4", 16)
+var one = big.NewInt(1)
+var two = big.NewInt(2)
 
-type Cipher struct {
-	A *big.Int
-	B *big.Int
+var ErrMessageLarge = errors.New("message bigger than public key")
+var ErrCipherLarge = errors.New("cipher bigger than public key")
+
+func GenerateKey(bitsize, probability int) (*elgamal.PrivateKey, error) {
+	p, q, g, err := GeneratePQZp(bitsize, probability)
+	if err != nil {
+		panic("Element Gen ERROR")
+	}
+
+	randSource := Mrand.New(Mrand.NewSource(time.Now().UnixNano()))
+	priv := new(big.Int).Rand(randSource, new(big.Int).Sub(q, one))
+	y := new(big.Int).Exp(g, priv, p)
+
+	var PubGalma elgamal.PublicKey
+	var PriGalma elgamal.PrivateKey
+	PubGalma.G = g
+	PubGalma.P = p
+	PubGalma.Y = y
+	PriGalma.PublicKey = PubGalma
+	PriGalma.X = priv
+	return &PriGalma, nil
 }
 
-func KeyGen() (*elgamal.PrivateKey, *elgamal.PublicKey, error) {
-	max := new(big.Int)
-	max.Exp(big.NewInt(2), big.NewInt(256), nil).Sub(max, big.NewInt(1))
+func GeneratePQZp(bitsize, probability int) (p, q, g *big.Int, err error) {
+	return Gen(bitsize, probability)
+}
 
-	x, err := rand.Int(rand.Reader, max)
+func Gen(n, probability int) (*big.Int, *big.Int, *big.Int, error) {
+	for {
+		q, err := rand.Prime(rand.Reader, n-1)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		t := new(big.Int).Mul(q, two)
+		p := new(big.Int).Add(t, one)
+		if p.ProbablyPrime(probability) {
+			for {
+				g, err := rand.Int(rand.Reader, p)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				b := new(big.Int).Exp(g, two, p)
+				if b.Cmp(one) == 0 {
+					continue
+				}
+				b = new(big.Int).Exp(g, q, p)
+				if b.Cmp(one) == 0 {
+					return p, q, g, nil
+				}
+			}
+		}
+	}
+}
+
+func Encrypt(pub elgamal.PublicKey, message []byte) ([]byte, []byte, error) {
+	k, err := rand.Int(rand.Reader, pub.P)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	y := new(big.Int).Exp(g, x, p)
-
-	priv := &elgamal.PrivateKey{
-		PublicKey: elgamal.PublicKey{
-			G: g,
-			P: p,
-			Y: y,
-		},
-		X: x,
+	m := new(big.Int).SetBytes(message)
+	if m.Cmp(pub.P) == 1 {
+		return nil, nil, ErrMessageLarge
 	}
-	return priv, &priv.PublicKey, nil
+
+	c1 := new(big.Int).Exp(pub.G, k, pub.P)
+	s := new(big.Int).Exp(pub.Y, k, pub.P)
+	c2 := new(big.Int).Mod(
+		new(big.Int).Mul(m, s),
+		pub.P,
+	)
+	return c1.Bytes(), c2.Bytes(), nil
 }
 
-func Encrypt(message string, pub *elgamal.PublicKey) (*Cipher, error) {
-	a, b, err := elgamal.Encrypt(rand.Reader, pub, []byte(message))
-	if err != nil {
-		return nil, err
+func Decrypt(priv *elgamal.PrivateKey, cipher1, cipher2 []byte) ([]byte, error) {
+	c1 := new(big.Int).SetBytes(cipher1)
+	c2 := new(big.Int).SetBytes(cipher2)
+	if c1.Cmp(priv.P) == 1 && c2.Cmp(priv.P) == 1 {
+		return nil, ErrCipherLarge
 	}
-	return &Cipher{
-		A: a,
-		B: b,
-	}, nil
-}
 
-func Decrypt(priv *elgamal.PrivateKey, ciphered *Cipher) ([]byte, error) {
-	return elgamal.Decrypt(priv, ciphered.A, ciphered.B)
+	s := new(big.Int).Exp(c1, priv.X, priv.P)
+	if s.ModInverse(s, priv.P) == nil {
+		return nil, errors.New("elgamal: invalid private key")
+	}
+
+	m := new(big.Int).Mod(
+		new(big.Int).Mul(s, c2),
+		priv.P,
+	)
+	return m.Bytes(), nil
 }
