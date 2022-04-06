@@ -49,7 +49,6 @@ type elgSupport struct {
 	selfCount int
 	elgMessg  ElgMsg
 	pubb      elgamal.PublicKey
-	skipFlag  bool
 }
 
 var conf Config
@@ -58,6 +57,7 @@ var client mqtt.Client
 var opponentPublicKey interface{}
 var ourKey interface{}
 var sup elgSupport
+var skipFlag bool
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	if KeyMonitor.isCome {
@@ -102,7 +102,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 				fmt.Println("ELG key gotten!")
 				sup.elgCount = 2
 				KeyMonitor.isCome = false
-				sup.skipFlag = true
+				skipFlag = true
 			}
 		}
 	}
@@ -131,8 +131,8 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		KeyMonitor.isCome = true
 		sup.elgCount = 3
 	default:
-		if string(msg.Payload()) == "reqKeyRSA"+conf.ID || string(msg.Payload()) == "reqKeyECC"+conf.ID || string(msg.Payload()) == "Keycoming"+conf.ID || string(msg.Payload()) == "reqKeyELG"+conf.ID || string(msg.Payload()) == "ELGKeycoming"+conf.ID || sup.skipFlag {
-			sup.skipFlag = false
+		if string(msg.Payload()) == "reqKeyRSA"+conf.ID || string(msg.Payload()) == "reqKeyECC"+conf.ID || string(msg.Payload()) == "Keycoming"+conf.ID || string(msg.Payload()) == "reqKeyELG"+conf.ID || string(msg.Payload()) == "ELGKeycoming"+conf.ID || skipFlag {
+			skipFlag = false
 		} else {
 			switch KeyMonitor.name {
 			case "rsa":
@@ -192,9 +192,11 @@ func core() {
 		switch KeyMonitor.name {
 		case "rsa":
 			cipher := orsa.RSA_Encrypt(text, opponentPublicKey.(*rsa.PublicKey))
+			skipFlag = true
 			pub([]byte(cipher))
 		case "ecc":
 			cipher := oecc.Ecies_Encrypt(text, opponentPublicKey.(*ecc.PublicKey))
+			skipFlag = true
 			pub([]byte(cipher))
 		case "elg":
 			cipher1, cipher2, _ := oelg.Encrypt(opponentPublicKey.(elgamal.PublicKey), []byte(text))
