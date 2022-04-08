@@ -1,4 +1,3 @@
 # Mqtt_crypt
 HI!
-This is a project to implement and test 
-vary crypto algorithm on MQTT networks
+This is a project to implement MQTT client and crypto algorithm (Ecies,RSA, Elgamal)
