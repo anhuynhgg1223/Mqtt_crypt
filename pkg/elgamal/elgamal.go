@@ -74,7 +74,7 @@ func Gen(n, probability int) (*big.Int, *big.Int, *big.Int, error) {
 func Encrypt(pub elgamal.PublicKey, message []byte) ([]byte, []byte, error) {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
+	go proc.GetProcStatus("ELG", "Encrypt", thisProc, stop)
 
 	k, err := rand.Int(rand.Reader, pub.P)
 	if err != nil {
@@ -97,7 +97,7 @@ func Encrypt(pub elgamal.PublicKey, message []byte) ([]byte, []byte, error) {
 func Decrypt(priv *elgamal.PrivateKey, cipher1, cipher2 []byte) ([]byte, error) {
 	thisProc, _ := process.NewProcess(int32(os.Getpid()))
 	stop := make(chan bool)
-	go proc.GetProcStatus("RSA", "Encrypt", thisProc, stop)
+	go proc.GetProcStatus("ELG", "Encrypt", thisProc, stop)
 	c1 := new(big.Int).SetBytes(cipher1)
 	c2 := new(big.Int).SetBytes(cipher2)
 	if c1.Cmp(priv.P) == 1 && c2.Cmp(priv.P) == 1 {
