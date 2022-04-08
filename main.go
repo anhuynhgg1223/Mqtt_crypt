@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"time"
 
@@ -40,15 +39,19 @@ type flagKey struct {
 }
 
 type ElgMsg struct {
-	msgFrag1 []byte
-	msgFrag2 []byte
+	MsgFrag1 []byte
+	MsgFrag2 []byte
 }
 
-type elgSupport struct {
-	elgCount  int
-	selfCount int
-	elgMessg  ElgMsg
-	pubb      elgamal.PublicKey
+type ElgSupply struct {
+	MessData ElgMsg
+	OPpubkey elgamal.PublicKey
+	OUprikey *elgamal.PrivateKey
+}
+
+type LockFlag struct {
+	Us   bool
+	Them bool
 }
 
 var conf Config
@@ -56,8 +59,9 @@ var KeyMonitor flagKey
 var client mqtt.Client
 var opponentPublicKey interface{}
 var ourKey interface{}
-var sup elgSupport
+var elgSup ElgSupply
 var skipFlag bool
+var theLock LockFlag
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	if KeyMonitor.isCome {
@@ -65,101 +69,52 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		case "rsa":
 			opponentPublicKey, _ = x509.ParsePKCS1PublicKey(msg.Payload())
 			fmt.Println("RSA key gotten!")
-			KeyMonitor.isCome = false
 		case "ecc":
 			opponentPublicKey = oecc.Ret_publicKey(msg.Payload())
 			fmt.Println("ECC key gotten!")
-			KeyMonitor.isCome = false
 		case "elg":
-			switch sup.elgCount {
-			case 3:
-				temp := big.NewInt(1)
-				temp.UnmarshalJSON(msg.Payload())
-				sup.pubb.G = big.NewInt(1)
-				fmt.Println("=================================== Get Key G =======================================")
-				fmt.Println(temp)
-				fmt.Println("=====================================================================================")
-				*sup.pubb.G = *temp
-				sup.elgCount--
-			case 2:
-				temp := big.NewInt(1)
-				temp.UnmarshalJSON(msg.Payload())
-				sup.pubb.P = big.NewInt(1)
-				fmt.Println("=================================== Get Key P =======================================")
-				fmt.Println(temp)
-				fmt.Println("=====================================================================================")
-				*sup.pubb.P = *temp
-				sup.elgCount--
-			case 1:
-				temp := big.NewInt(1)
-				temp.UnmarshalJSON(msg.Payload())
-				sup.pubb.Y = big.NewInt(1)
-				fmt.Println("=================================== Get Key y =======================================")
-				fmt.Println(temp)
-				fmt.Println("=====================================================================================")
-				*sup.pubb.Y = *temp
-				opponentPublicKey = sup.pubb
-				fmt.Println("ELG key gotten!")
-				sup.elgCount = 2
-				KeyMonitor.isCome = false
-				skipFlag = true
-			}
+			json.Unmarshal(msg.Payload(), &elgSup.OPpubkey)
+			fmt.Println("ELG key gotten!")
+			opponentPublicKey = true
 		}
-	}
-	switch string(msg.Payload()) {
-	case "reqKeyRSA" + conf.OpponentID:
-		pub([]byte("Keycoming" + conf.ID))
-		pub(x509.MarshalPKCS1PublicKey(&ourKey.(*rsa.PrivateKey).PublicKey))
-	case "reqKeyECC" + conf.OpponentID:
-		publicKeyByte := elliptic.Marshal(ourKey.(*ecc.PrivateKey).PublicKey.Curve, ourKey.(*ecc.PrivateKey).PublicKey.X, ourKey.(*ecc.PrivateKey).PublicKey.Y)
-		pub([]byte("Keycoming" + conf.ID))
-		pub(publicKeyByte)
-	case "reqKeyELG" + conf.OpponentID:
-		pub([]byte("ELGKeycoming" + conf.ID))
-		sup.selfCount = 3
-		by, _ := ourKey.(*elgamal.PrivateKey).PublicKey.G.MarshalJSON()
-		pub(by)
-		time.Sleep(time.Millisecond * 100)
-		by, _ = ourKey.(*elgamal.PrivateKey).PublicKey.P.MarshalJSON()
-		pub(by)
-		time.Sleep(time.Millisecond * 100)
-		by, _ = ourKey.(*elgamal.PrivateKey).PublicKey.Y.MarshalJSON()
-		pub(by)
-	case "Keycoming" + conf.OpponentID:
-		KeyMonitor.isCome = true
-	case "ELGKeycoming" + conf.OpponentID:
-		KeyMonitor.isCome = true
-		sup.elgCount = 3
-	default:
-		if string(msg.Payload()) == "reqKeyRSA"+conf.ID || string(msg.Payload()) == "reqKeyECC"+conf.ID || string(msg.Payload()) == "Keycoming"+conf.ID || string(msg.Payload()) == "reqKeyELG"+conf.ID || string(msg.Payload()) == "ELGKeycoming"+conf.ID || skipFlag {
-			skipFlag = false
-		} else {
+		KeyMonitor.isCome = false
+		theLock.Us = true
+		pub([]byte(conf.ID + "_isReady!"))
+	} else {
+		switch string(msg.Payload()) {
+		case "reqKey" + conf.OpponentID:
 			switch KeyMonitor.name {
 			case "rsa":
-				plain := orsa.RSA_Decrypt(string(msg.Payload()), ourKey.(*rsa.PrivateKey))
-				fmt.Printf("Received message: %v \n========\n", plain)
+				pub([]byte("Keycoming" + conf.ID))
+				pub(x509.MarshalPKCS1PublicKey(&ourKey.(*rsa.PrivateKey).PublicKey))
 			case "ecc":
-				plain := oecc.Ecies_Decrypt(string(msg.Payload()), ourKey.(*ecc.PrivateKey))
-				fmt.Printf("Received message: %v \n========\n", plain)
+				publicKeyByte := elliptic.Marshal(ourKey.(*ecc.PrivateKey).PublicKey.Curve, ourKey.(*ecc.PrivateKey).PublicKey.X, ourKey.(*ecc.PrivateKey).PublicKey.Y)
+				pub([]byte("Keycoming" + conf.ID))
+				pub(publicKeyByte)
 			case "elg":
-
-				if !KeyMonitor.isCome && sup.selfCount == 0 {
-					if sup.elgCount == 1 {
-						sup.elgMessg.msgFrag2 = msg.Payload()
-						plain, err := oelg.Decrypt(ourKey.(*elgamal.PrivateKey), sup.elgMessg.msgFrag1, sup.elgMessg.msgFrag2)
-						if err != nil {
-							panic(err)
-						}
-						sup.elgCount++
-						fmt.Printf("Received message: %s \n========\n", plain)
-					} else {
-						sup.elgMessg.msgFrag1 = msg.Payload()
-						sup.elgCount--
-					}
-				}
-
-				if sup.selfCount > 0 {
-					sup.selfCount--
+				pub([]byte("Keycoming" + conf.ID))
+				PubOut, _ := json.Marshal(elgSup.OUprikey.PublicKey)
+				pub(PubOut)
+			}
+		case "Keycoming" + conf.OpponentID:
+			KeyMonitor.isCome = true
+		case conf.OpponentID + "_isReady!":
+			theLock.Them = true
+		default:
+			if !theLock.Us || !theLock.Them || skipFlag {
+				skipFlag = false
+			} else {
+				switch KeyMonitor.name {
+				case "rsa":
+					plain := orsa.RSA_Decrypt(string(msg.Payload()), ourKey.(*rsa.PrivateKey))
+					fmt.Printf("Received message: %v \n\n", plain)
+				case "ecc":
+					plain := oecc.Ecies_Decrypt(string(msg.Payload()), ourKey.(*ecc.PrivateKey))
+					fmt.Printf("Received message: %v \n\n", plain)
+				case "elg":
+					json.Unmarshal(msg.Payload(), &elgSup.MessData)
+					plain, _ := oelg.Decrypt(elgSup.OUprikey, elgSup.MessData.MsgFrag1, elgSup.MessData.MsgFrag2)
+					fmt.Printf("Received message: %s \n\n", plain)
 				}
 			}
 		}
@@ -192,20 +147,21 @@ func core() {
 		switch KeyMonitor.name {
 		case "rsa":
 			cipher := orsa.RSA_Encrypt(text, opponentPublicKey.(*rsa.PublicKey))
-			skipFlag = true
 			pub([]byte(cipher))
 		case "ecc":
 			cipher := oecc.Ecies_Encrypt(text, opponentPublicKey.(*ecc.PublicKey))
-			skipFlag = true
 			pub([]byte(cipher))
 		case "elg":
-			cipher1, cipher2, _ := oelg.Encrypt(opponentPublicKey.(elgamal.PublicKey), []byte(text))
-			pub(cipher1)
-			pub(cipher2)
+			cipher1, cipher2, _ := oelg.Encrypt(elgSup.OPpubkey, []byte(text))
+			elgSup.MessData.MsgFrag1 = cipher1
+			elgSup.MessData.MsgFrag2 = cipher2
+			contentOut, _ := json.Marshal(elgSup.MessData)
+			pub(contentOut)
 		}
 	}
 }
 func pub(message []byte) {
+	skipFlag = true
 	token := client.Publish(conf.Topic, 0, false, message)
 	token.Wait()
 }
@@ -222,11 +178,11 @@ func reqKey() {
 	for opponentPublicKey == nil {
 		switch KeyMonitor.name {
 		case "rsa":
-			pub([]byte("reqKeyRSA" + conf.ID))
+			pub([]byte("reqKey" + conf.ID))
 		case "ecc":
-			pub([]byte("reqKeyECC" + conf.ID))
+			pub([]byte("reqKey" + conf.ID))
 		case "elg":
-			pub([]byte("reqKeyELG" + conf.ID))
+			pub([]byte("reqKey" + conf.ID))
 		}
 		time.Sleep(time.Millisecond * 2000)
 	}
@@ -235,11 +191,11 @@ func reqKey() {
 func generate_Key() {
 	switch KeyMonitor.name {
 	case "rsa":
-		ourKey, _ = rsa.GenerateKey(rand.Reader, 2048)
+		ourKey, _ = rsa.GenerateKey(rand.Reader, 1024)
 	case "ecc":
 		ourKey, _ = ecc.GenerateKey()
 	case "elg":
-		ourKey, _ = oelg.GenerateKey(512, 1)
+		elgSup.OUprikey, _ = oelg.GenerateKey(1024, 1)
 	}
 }
 
