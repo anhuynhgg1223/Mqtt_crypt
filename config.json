@@ -1,1 +1,1 @@
-{"ID":"Node1","Ip":"192.168.208.143","Port":1883,"Username":"rasOS","Passwd":"12345","Topic":"topic/test","OpponentID":"Node2","TypeEncrypt":"elg"}
+{"ID":"This_Node_Name","Ip":"This_Node_IP","Port":1883,"Username":"UserName_To_Connect_Broker","Passwd":"Pass_To_Connect_Broker","Topic":"The_Topic_To_SUP_And_PUB","OpponentID":"Opponent_Node_Name","TypeEncrypt":"The_Encrypt_Type"}
