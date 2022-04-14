@@ -27,5 +27,6 @@ func GetProcStatus(nameCrypt string, pharse string, p *process.Process, stop cha
 				fo_metric.WriteString(fmt.Sprintf("CPU: %v  Memory: %v \n", c, m))
 			}
 		}
+		time.Sleep(time.Microsecond * 280)
 	}
 }

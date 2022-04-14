@@ -1,1 +1,1 @@
-{"ID":"This_Node_Name","Ip":"This_Node_IP","Port":1883,"Username":"UserName_To_Connect_Broker","Passwd":"Pass_To_Connect_Broker","Topic":"The_Topic_To_SUP_And_PUB","OpponentID":"Opponent_Node_Name","TypeEncrypt":"The_Encrypt_Type"}
+{"ID":"This_Node_Name","Ip":"Broker_Node_IP","Port":1883,"Username":"UserName_To_Connect_Broker","Passwd":"Pass_To_Connect_Broker","Topic":"The_Topic_To_SUP_And_PUB","OpponentID":"Opponent_Node_Name","TypeEncrypt":"The_Encrypt_Type"}
