@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"time"
 
@@ -139,11 +140,22 @@ func main() {
 }
 
 func core() {
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		var text string
-		scanner.Scan()
-		text = scanner.Text()
+	scantype := bufio.NewScanner(os.Stdin)
+	var textType string
+	for textType != "start" {
+		scantype.Scan()
+		textType = scantype.Text()
+	}
+
+	file, err := os.Open("wordlist.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		time.Sleep(time.Millisecond * 50)
+		text := scanner.Text()
 		switch KeyMonitor.name {
 		case "rsa":
 			cipher := orsa.RSA_Encrypt(text, opponentPublicKey.(*rsa.PublicKey))
@@ -159,7 +171,11 @@ func core() {
 			pub(contentOut)
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
 }
+
 func pub(message []byte) {
 	skipFlag = true
 	token := client.Publish(conf.Topic, 0, false, message)

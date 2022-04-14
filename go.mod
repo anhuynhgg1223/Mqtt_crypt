@@ -6,7 +6,7 @@ require (
 	github.com/aead/ecdh v0.2.0
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
+	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 )
 
 require (
