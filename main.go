@@ -142,37 +142,40 @@ func main() {
 func core() {
 	scantype := bufio.NewScanner(os.Stdin)
 	var textType string
-	for textType != "start" {
-		scantype.Scan()
-		textType = scantype.Text()
-	}
 
-	file, err := os.Open("wordlist.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		time.Sleep(time.Millisecond * 50)
-		text := scanner.Text()
-		switch KeyMonitor.name {
-		case "rsa":
-			cipher := orsa.RSA_Encrypt(text, opponentPublicKey.(*rsa.PublicKey))
-			pub([]byte(cipher))
-		case "ecc":
-			cipher := oecc.Ecies_Encrypt(text, opponentPublicKey.(*ecc.PublicKey))
-			pub([]byte(cipher))
-		case "elg":
-			cipher1, cipher2, _ := oelg.Encrypt(elgSup.OPpubkey, []byte(text))
-			elgSup.MessData.MsgFrag1 = cipher1
-			elgSup.MessData.MsgFrag2 = cipher2
-			contentOut, _ := json.Marshal(elgSup.MessData)
-			pub(contentOut)
+	for {
+		for textType != "start" {
+			scantype.Scan()
+			textType = scantype.Text()
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		file, err := os.Open("wordlist.txt")
+		if err != nil {
+			log.Fatal(err)
+		}
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			time.Sleep(time.Millisecond * 50)
+			text := scanner.Text()
+			switch KeyMonitor.name {
+			case "rsa":
+				cipher := orsa.RSA_Encrypt(text, opponentPublicKey.(*rsa.PublicKey))
+				pub([]byte(cipher))
+			case "ecc":
+				cipher := oecc.Ecies_Encrypt(text, opponentPublicKey.(*ecc.PublicKey))
+				pub([]byte(cipher))
+			case "elg":
+				cipher1, cipher2, _ := oelg.Encrypt(elgSup.OPpubkey, []byte(text))
+				elgSup.MessData.MsgFrag1 = cipher1
+				elgSup.MessData.MsgFrag2 = cipher2
+				contentOut, _ := json.Marshal(elgSup.MessData)
+				pub(contentOut)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		file.Close()
+		textType = "end"
 	}
 }
 
@@ -207,11 +210,11 @@ func reqKey() {
 func generate_Key() {
 	switch KeyMonitor.name {
 	case "rsa":
-		ourKey, _ = rsa.GenerateKey(rand.Reader, 1024)
+		ourKey, _ = rsa.GenerateKey(rand.Reader, 2048)
 	case "ecc":
 		ourKey, _ = ecc.GenerateKey()
 	case "elg":
-		elgSup.OUprikey, _ = oelg.GenerateKey(1024, 1)
+		elgSup.OUprikey, _ = oelg.GenerateKey(2048, 1)
 	}
 }
 
